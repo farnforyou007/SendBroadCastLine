@@ -57,10 +57,17 @@ export default function StudentRegister() {
         try {
             const response = await fetch('/api/register', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                // headers ต้องมีแค่ข้อมูลทางเทคนิค (ASCII เท่านั้น)
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                // ข้อมูลภาษาไทย (ชื่อ-นามสกุล) ต้องอยู่ใน body เท่านั้น
                 body: JSON.stringify({
-                    ...formData,
-                    lineUserId: profile.userId
+                    studentId: formData.studentId,
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                    phone: formData.phone,
+                    lineUserId: profile?.userId
                 }),
             });
 
