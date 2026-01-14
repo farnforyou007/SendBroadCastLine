@@ -18,7 +18,7 @@ export default function StudentRegister() {
             try {
                 await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID });
                 if (!liff.isLoggedIn()) {
-                    // liff.login();
+                    liff.login();
                 } else {
                     const userProfile = await liff.getProfile();
                     setProfile(userProfile);
