@@ -171,8 +171,8 @@ export default function StudentRegister() {
                     <button
                         disabled={loading}
                         className={`w-full py-5 rounded-2xl font-bold text-lg transition-all duration-300 active:scale-[0.98] ${loading
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : 'bg-[#6366f1]/10 text-[#6366f1] hover:bg-[#6366f1] hover:text-white border border-[#6366f1]/20'
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            : 'bg-[#6366f1]/10 text-[#6366f1] hover:bg-[#6366f1] hover:text-white border border-[#6366f1]/20'
                             }`}
                     >
                         {loading ? (
