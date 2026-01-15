@@ -259,7 +259,7 @@ export default function AdminDashboard() {
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-[#f8fafc] text-[#94a3b8] text-[11px] font-bold uppercase tracking-widest border-b border-slate-100">
+                            <thead className="bg-[#f8fafc] text-slate-600 text-[13px] font-mediam uppercase tracking-widest border-b border-slate-100">
 
                                 <tr>{mode === 'multi' && <th className="px-8 py-5 w-16 text-center">เลือก</th>}
                                     <th className="px-8 py-5 w-20 text-center">ลำดับ</th>
@@ -281,18 +281,18 @@ export default function AdminDashboard() {
                                                 </div>
                                             </td>
                                         )}
-                                        <td className="px-8 py-5 text-center text-slate-400 font-medium italic">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                                        <td className="px-8 py-5">
+                                        <td className="text-[8px] px-8 py-5 text-center text-slate-400 font-medium italic">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                                        <td className="text-[8px] px-8 py-5">
                                             <span className="bg-slate-100 text-slate-500 px-3.5 py-1.5 rounded-full text-[11px] font-medium border border-slate-200 shadow-sm uppercase">
                                                 {s.note || '-'}
                                             </span>
                                         </td>
-                                        <td className="px-8 py-5 whitespace-nowrap">
+                                        <td className="text-[15px] px-8 py-5 whitespace-nowrap">
                                             <div className="font-semibold text-[#334155] min-w-[150px]">
                                                 {s.display_name_th || s.first_name}
                                             </div>
                                             <div className="flex items-center gap-1.5 mt-1">
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${s.user_type === 'admin'
+                                                <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${s.user_type === 'admin'
                                                         ? 'bg-purple-50 text-purple-600 border border-purple-100'
                                                         : 'bg-blue-50 text-blue-600 border border-blue-100'
                                                     }`}>
@@ -300,7 +300,7 @@ export default function AdminDashboard() {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-5 font-medium text-[#475569]">{s.phone || '-'}</td>
+                                        <td className="text-[13px] px-8 py-5 font-medium text-[#475569]">{s.phone || '-'}</td>
                                         <td className="px-8 py-5 text-center">
                                             <div
                                                 className={`inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${
@@ -365,10 +365,10 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Broadcast & Preview Layout */}
-                <div id="broadcast-section" className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch pb-20 font-['Prompt']">
+                <div  className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch pb-20 font-['Prompt']">
 
                     {/* Broadcast Center คงเดิม */}
-                    <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col h-full">
+                    <div id="broadcast-section" className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col h-full">
                         {/* หัวข้อส่วนบรอดแคสต์ (New Header) */}
                         <div className="flex items-center gap-4 mb-8">
                             <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-600 shadow-inner">
