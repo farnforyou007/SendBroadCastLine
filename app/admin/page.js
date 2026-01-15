@@ -217,7 +217,7 @@ export default function AdminDashboard() {
                 <div className="flex justify-between items-end">
                     <div className="space-y-1">
                         <h1 className="text-3xl font-bold text-[#1e293b] tracking-tight">จัดการรายชื่อนักศึกษา</h1>
-                        <p className="text-[#64748b] text-sm font-medium">จัดการข้อมูลและบรอดแคสต์สถานะสมาชิกในระบบ</p>
+                        <p className="text-[#64748b] text-sm font-medium">จัดการข้อมูลบรอดแคสต์สมาชิกในระบบ</p>
                     </div>
                     <button onClick={fetchStudents} className="p-3 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95">
                         <RefreshCw className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
@@ -290,6 +290,14 @@ export default function AdminDashboard() {
                                         <td className="px-8 py-5 whitespace-nowrap">
                                             <div className="font-semibold text-[#334155] min-w-[150px]">
                                                 {s.display_name_th || s.first_name}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 mt-1">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${s.user_type === 'admin'
+                                                        ? 'bg-purple-50 text-purple-600 border border-purple-100'
+                                                        : 'bg-blue-50 text-blue-600 border border-blue-100'
+                                                    }`}>
+                                                    {s.user_type || 'Student'}
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="px-8 py-5 font-medium text-[#475569]">{s.phone || '-'}</td>
