@@ -1,21 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
-    console.log("--- API CALL: FETCHING STUDENTS ---"); // ล็อกนี้จะขึ้นที่ VS Code
-    const supabase = createClient(
+    // ใช้ Service Role Key (ตัวล่าง) ในฝั่ง Server เท่านั้น
+    const supabaseAdmin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY // ใช้ Key นี้ชัวร์กว่า
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
-    const { data, error } = await supabase
-        .from('mst_personal')
+    const { data, error } = await supabaseAdmin
+        .from('mst_personal') // << เช็คชื่อตารางใน Supabase อีกครั้งว่าตรงมั้ย
         .select('*');
 
     if (error) {
-        console.error("Supabase API Error:", error.message);
         return Response.json({ error: error.message }, { status: 500 });
     }
 
-    console.log("Data found:", data.length, "rows");
     return Response.json(data);
 }
