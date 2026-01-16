@@ -1,7 +1,10 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Swal from 'sweetalert2';
+
+
 import {
     Search,
     ChevronDown,
@@ -23,6 +26,8 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+
+
 export default function AdminDashboard() {
     // --- Table & Filter States ---
     const [students, setStudents] = useState([]);
@@ -43,9 +48,16 @@ export default function AdminDashboard() {
     // state chat
     const [chatMessages, setChatMessages] = useState([]);
     const [activeChatId, setActiveChatId] = useState(null); // เก็บ ID คนที่เรากำลังคุยด้วย
+
+    const chatEndRef = useRef(null);
+
     const Toast = Swal.mixin({
         toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
     });
+
+    useEffect(() => {
+        document.title = "ระบบจัดการหลังบ้าน | Admin Dashboard";
+    }, []);
 
     useEffect(() => { fetchStudents(); }, []);
 
@@ -76,6 +88,14 @@ export default function AdminDashboard() {
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     };
+
+    const scrollToBottom = () => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+    // เมื่อมีข้อความใหม่ (chatMessages เปลี่ยน) ให้สั่งเลื่อนลง
+    useEffect(() => {
+        scrollToBottom();
+    }, [chatMessages]);
     // --- แก้ไขฟังก์ชัน handleSelectRow ให้ฉลาดขึ้น ---
     const handleSelectRow = (student) => {
         const id = student.line_user_id;
@@ -403,9 +423,9 @@ export default function AdminDashboard() {
                                                         handleSelectRow(s);
                                                     }}
                                                     className={`cursor-pointer inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${(mode === 'single' && targetYear === s.line_user_id) ||
-                                                            (mode === 'multi' && tags.find(t => t.id === s.line_user_id))
-                                                            ? 'bg-slate-800 text-white shadow-xl scale-110'
-                                                            : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-400 hover:bg-slate-50 shadow-sm'
+                                                        (mode === 'multi' && tags.find(t => t.id === s.line_user_id))
+                                                        ? 'bg-slate-800 text-white shadow-xl scale-110'
+                                                        : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-400 hover:bg-slate-50 shadow-sm'
                                                         }`}
                                                 >
                                                     {mode === 'multi' && tags.find(t => t.id === s.line_user_id) ? (
@@ -580,24 +600,32 @@ export default function AdminDashboard() {
 
                         {activeChatId ? (
                             /* --- 💬 ส่วนแสดงประวัติแชท (Chat History UI) --- */
-                            <div className="flex-grow flex flex-col bg-[#F1F5F9] rounded-[2rem] p-4 overflow-hidden border border-slate-200 shadow-inner">
+                            < div className="flex-grow flex flex-col bg-[#F1F5F9] rounded-[2rem] p-4 overflow-hidden border border-slate-200 shadow-inner h-[500px]">
                                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                                    {chatMessages.length > 0 ? chatMessages.map((msg) => (
-                                        <div
-                                            key={msg.id}
-                                            className={`flex ${msg.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}
-                                        >
-                                            <div className={`max-w-[80%] p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender_type === 'admin'
-                                                ? 'bg-slate-800 text-white rounded-tr-none'
-                                                : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
-                                                }`}>
-                                                <p className="break-words whitespace-pre-wrap">{msg.message_text}</p>
-                                                <p className={`text-[9px] mt-1 opacity-50 ${msg.sender_type === 'admin' ? 'text-right' : 'text-left'}`}>
-                                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </p>
-                                            </div>
+                                    {chatMessages.length > 0 ? (
+                                        /* ใช้แผงควบคุมหลักเพื่อแยกส่วนรายการข้อความกับตัวเลื่อน */
+                                        <div className="flex flex-col gap-4">
+                                            {chatMessages.map((msg, index) => (
+                                                <div
+                                                    /* ✅ Key ต้องอยู่ที่ Div นอกสุดของลูปเสมอ */
+                                                    key={`chat-msg-${msg.id || index}`}
+                                                    className={`flex ${msg.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}
+                                                >
+                                                    <div className={`max-w-[80%] p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender_type === 'admin'
+                                                        ? 'bg-slate-800 text-white rounded-tr-none'
+                                                        : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
+                                                        }`}>
+                                                        <p className="break-words whitespace-pre-wrap">{msg.message_text}</p>
+                                                        <p className={`text-[9px] mt-1 opacity-50 ${msg.sender_type === 'admin' ? 'text-right' : 'text-left'}`}>
+                                                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {/* ✅ ย้าย ref ออกมาไว้นอกลูป map แต่อยู่ในส่วนที่เลื่อนได้ */}
+                                            <div ref={chatEndRef} className="h-2" />
                                         </div>
-                                    )) : (
+                                    ) : (
                                         <div className="h-full flex flex-col items-center justify-center text-slate-400 italic space-y-2">
                                             <MessageSquare className="w-8 h-8 opacity-20" />
                                             <p className="text-xs">ยังไม่มีประวัติการคุย</p>
@@ -605,7 +633,7 @@ export default function AdminDashboard() {
                                     )}
                                 </div>
                                 {/* สถานะผู้รับที่กำลังเปิดแชทอยู่ */}
-                                <div className="mt-4 pt-3 border-t border-slate-200 text-center">
+                                <div className="mt-4 pt-3 border-t border-slate-200 text-center flex-shrink-0">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
                                         คุยกับ: <span className="text-slate-900">{selectedName}</span>
                                     </p>

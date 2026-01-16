@@ -1,0 +1,11 @@
+// app/robots.txt
+export default function robots() {
+  return {
+    rules: {
+      userAgent: '*',
+      allow: '/',           
+      disallow: '/admin/',  
+    },
+    sitemap: 'https://send-broad-cast-line.vercel.app/sitemap.xml',
+  }
+}

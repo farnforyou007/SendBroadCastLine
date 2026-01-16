@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import liff from '@line/liff';
-import Swal from 'sweetalert2'; // นำเข้า SweetAlert2
+import Swal from 'sweetalert2';
 
 export default function StudentRegister() {
     const [profile, setProfile] = useState(null);
@@ -12,6 +12,11 @@ export default function StudentRegister() {
         lastName: '',
         phone: '',
     });
+
+    useEffect(() => {
+        // ตั้งชื่อ Title สำหรับ SEO (กรณีใช้ use client)
+        document.title = "ลงทะเบียนรับข่าวสารนักศึกษา | คณะการแพทย์แผนไทย";
+    }, []);
 
     useEffect(() => {
         const initLiff = async () => {
