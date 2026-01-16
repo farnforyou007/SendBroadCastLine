@@ -21,6 +21,8 @@ import {
     X,
     GraduationCap, // เพิ่มอันนี้
     Zap,
+    Trash,
+
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -52,30 +54,240 @@ export default function AdminDashboard() {
     const [activeChatId, setActiveChatId] = useState(null); // เก็บ ID คนที่เรากำลังคุยด้วย
 
     const chatEndRef = useRef(null);
-
+    const [broadcastLogs, setBroadcastLogs] = useState([]);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [onlyUnread, setOnlyUnread] = useState(false); // ✅ เพิ่มตัวนี้
     const Toast = Swal.mixin({
-        toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        background: '#ffffff',
+        // ✅ ใส่ Animation ตอนเด้งเข้า-ออก
+        showClass: {
+            popup: 'animate__animated animate__fadeInRight animate__faster'
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutRight animate__faster'
+        },
+        // ✅ ตกแต่งกรอบให้โค้งมนและมีเงา
+        customClass: {
+            popup: 'rounded-[1.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border border-slate-50',
+            title: 'text-slate-800 font-bold text-[15px]',
+            htmlContainer: 'text-slate-500 text-[13px] font-medium'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
     });
+
+    // 1. เพิ่ม State สำหรับเก็บจำนวน Unread
+    const [unreadCounts, setUnreadCounts] = useState({});
+
+    // 2. ฟังก์ชันดึงจำนวนข้อความที่ยังไม่อ่านทั้งหมด
+    const fetchUnreadCounts = async () => {
+        const { data, error } = await supabase
+            .from('chat_messages')
+            .select('line_user_id')
+            .eq('sender_type', 'user')
+            .eq('is_read', false);
+
+        if (!error) {
+            // นับจำนวนแยกตามรายชื่อ
+            const counts = data.reduce((acc, msg) => {
+                acc[msg.line_user_id] = (acc[msg.line_user_id] || 0) + 1;
+                return acc;
+            }, {});
+            setUnreadCounts(counts);
+        }
+    };
+
+    const getStudentName = (lineUserId) => {
+        if (!students || students.length === 0) return 'กำลังโหลด...';
+        const student = students.find(s => s.line_user_id === lineUserId);
+        return student ? (student.display_name_th || student.first_name) : 'นักศึกษาใหม่';
+    };
+
+    // 2. ปรับปรุง useEffect สำหรับ Realtime
+    useEffect(() => {
+        // ฟังก์ชันดึงเลข Unread (ตัวเดิมที่คุณทำไว้)
+        fetchUnreadCounts();
+
+        const channel = supabase
+            .channel('chat_notifications')
+            .on('postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'chat_messages',
+                    filter: "sender_type=eq.user" // ✅ ฟังเฉพาะข้อความที่ส่งมาจากฝั่ง User
+                },
+                (payload) => {
+                    const newMessage = payload.new;
+                    const senderName = getStudentName(newMessage.line_user_id);
+
+                    let displayMsg = "";
+                    // ✅ เช็คประเภทจาก message_type หรือข้อความที่เป็นลิงก์สติกเกอร์
+                    if (newMessage.message_type === 'sticker' || (newMessage.message_text && newMessage.message_text.includes('stickershop'))) {
+                        displayMsg = "ส่งสติกเกอร์ถึงคุณ... 🧸";
+                    } else if (newMessage.message_type === 'image') {
+                        displayMsg = "ส่งรูปภาพถึงคุณ... 🖼️";
+                    } else {
+                        displayMsg = newMessage.message_text || "ส่งข้อความถึงคุณ...";
+                    }
+
+                    showCustomToast(senderName, displayMsg);
+                    fetchUnreadCounts(); // ✅ อัปเดตเลข Badge ในตารางทันที
+
+                    // ถ้าคุยกับคนนี้อยู่ ให้ดึงแชทใหม่มาโชว์
+                    if (mode === 'single' && targetYear === newMessage.line_user_id) {
+                        fetchChatMessages(newMessage.line_user_id);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [students, mode, targetYear]); // ใส่ dependencies ให้ครบเพื่อให้ Logic เช็คชื่อและแชทปัจจุบันทำงานได้
+
+    const showCustomToast = (name, msg) => {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 5000,
+            timerProgressBar: true,
+            background: '#ffffff',
+            html: `
+            <div style="display: flex; align-items: center; gap: 12px; text-align: left;">
+                <div style="background: #eef2ff; padding: 10px; border-radius: 14px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 800; font-size: 13px; color: #1e293b; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">ข้อความใหม่</div>
+                    <div style="font-weight: 600; font-size: 14px; color: #6366f1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                    <div style="font-weight: 500; font-size: 12px; color: #64748b; margin-top: 1px;">${msg}</div>
+                </div>
+            </div>
+        `,
+            showClass: {
+                popup: 'animate__animated animate__fadeInRight animate__faster'
+            },
+            hideClass: {
+                popup: 'animate__animated animate__fadeOutRight animate__faster'
+            },
+            customClass: {
+                popup: 'rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border border-slate-100'
+            }
+        });
+    };
+
+
+    // ตัวอย่างการดึงข้อมูล unread แบบง่ายๆ ใน useEffect
+    useEffect(() => {
+        const fetchUnread = async () => {
+            const { data } = await supabase
+                .from('chat_messages')
+                .select('line_user_id')
+                .eq('sender_type', 'user')
+                .eq('is_read', false);
+
+            const counts = data.reduce((acc, msg) => {
+                acc[msg.line_user_id] = (acc[msg.line_user_id] || 0) + 1;
+                return acc;
+            }, {});
+            setUnreadCounts(counts);
+        };
+
+        fetchUnread();
+        // ถ้าอยากให้ Real-time ต้องทำ Subscription เพิ่มเติมครับ
+    }, []);
+
+
+    const fetchLogs = async () => {
+        // 1. ดึงข้อมูล Log
+        const { data: logs, error: logsError } = await supabase
+            .from('broadcast_logs')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+        if (logsError) return;
+
+        // 2. ดึงข้อมูลนักศึกษามาไว้สำหรับเทียบชื่อ
+        const { data: studentsData } = await supabase
+            .from('mst_personal')
+            .select('line_user_id, display_name_th, first_name');
+
+        // 3. แปลงข้อมูล Log ให้มีชื่อนักศึกษา (student_name)
+        const formattedData = logs.map(log => {
+            let nameList = [];
+
+            // ✅ ตรวจสอบว่า target_id มีหลายคน (คั่นด้วย comma) หรือไม่
+            if (log.target_id && log.target_id.includes(',')) {
+                const ids = log.target_id.split(',');
+                // วนลูปหาชื่อทุกคนจาก IDs
+                nameList = ids.map(id => {
+                    const student = studentsData?.find(s => s.line_user_id === id.trim());
+                    return student ? (student.display_name_th || student.first_name) : 'ไม่พบชื่อ';
+                });
+            } else {
+                // กรณีคนเดียว
+                const student = studentsData?.find(s => s.line_user_id === log.target_id);
+                nameList = student ? [student.display_name_th || student.first_name] : [log.target_id];
+            }
+
+            return {
+                ...log,
+                // ✅ รวมชื่อทุกคนเป็น String คั่นด้วย comma เพื่อเอาไปใส่ใน title (Tooltip)
+                student_name: nameList.join(', ')
+            };
+        });
+
+        setBroadcastLogs(formattedData);
+    };
 
     useEffect(() => {
         document.title = "ระบบจัดการหลังบ้าน | Admin Dashboard";
+        fetchLogs();
     }, []);
 
     useEffect(() => { fetchStudents(); }, []);
 
     const fetchStudents = async () => {
         setLoading(true);
-        try {
-            const { data, error } = await supabase
-                .from('mst_personal')
-                .select('*')
-                .order('created_at', { ascending: false });
-            if (error) throw error;
-            setStudents(data || []);
-        } catch (err) {
-            Swal.fire('Error', 'ไม่สามารถดึงข้อมูลได้', 'error');
-        } finally { setLoading(false); }
+        const { data, error } = await supabase
+            .from('mst_personal')
+            .select('*')
+            // ✅ เปลี่ยนจาก last_chat_at เป็น created_at (เพราะใน DB ไม่มี last_chat_at)
+            .order('created_at', { ascending: false });
+
+        if (!error) {
+            setStudents(data);
+        } else {
+            console.error("Fetch Error:", error);
+        }
+        setLoading(false);
     };
+
+    const sortedStudents = useMemo(() => {
+        return [...students].sort((a, b) => {
+            const countA = unreadCounts[a.line_user_id] || 0;
+            const countB = unreadCounts[b.line_user_id] || 0;
+
+            // 1. ใครมีข้อความค้าง (Unread) ให้ขึ้นก่อน
+            if (countA !== countB) {
+                return countB - countA;
+            }
+
+            // 2. ถ้า Unread เท่ากัน (เช่น 0 ทั้งคู่) ให้เรียงตามเวลาที่บันทึกหรือชื่อ
+            return 0;
+        });
+    }, [students, unreadCounts]);
 
     const dynamicYears = useMemo(() => {
         const years = new Set();
@@ -98,11 +310,26 @@ export default function AdminDashboard() {
     useEffect(() => {
         scrollToBottom();
     }, [chatMessages]);
+
     // --- แก้ไขฟังก์ชัน handleSelectRow ให้ฉลาดขึ้น ---
-    const handleSelectRow = (student) => {
+    const handleSelectRow = async (student) => {
         const id = student.line_user_id;
         const name = student.display_name_th || student.first_name;
         if (!id) return;
+
+        const { error } = await supabase
+            .from('chat_messages')
+            .update({ is_read: true })
+            .eq('line_user_id', student.line_user_id)
+            .eq('is_read', false);
+
+        if (!error) {
+            // อัปเดต State unreadCounts ในหน้าจอทันที
+            setUnreadCounts(prev => ({
+                ...prev,
+                [student.line_user_id]: 0
+            }));
+        }
 
         if (mode === 'year' || mode === 'single') {
             setMode('single');
@@ -125,63 +352,37 @@ export default function AdminDashboard() {
             }
         }
     };
-    const filteredStudents = useMemo(() => {
-        return students.filter(s => {
-            const name = (s.display_name_th || s.first_name || "").toLowerCase();
-            const studentId = (s.note || "").toLowerCase();
-            const matchesSearch = name.includes(searchTerm.toLowerCase()) || studentId.includes(searchTerm.toLowerCase());
-            const matchesYear = filterYear === 'all' || s.note?.startsWith(filterYear);
-            return matchesSearch && matchesYear;
-        });
-    }, [students, searchTerm, filterYear]);
 
-    const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
-    const currentItems = filteredStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    const fetchChatMessages = async (lineUserId) => {
+        if (!lineUserId) return;
+
+        const { data, error } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('line_user_id', lineUserId)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching chat:', error);
+        } else {
+            setChatMessages(data || []); // อัปเดตข้อความในหน้าจอ
+        }
+    };
+
+    // const filteredStudents = useMemo(() => {
+    //     return students.filter(s => {
+    //         const name = (s.display_name_th || s.first_name || "").toLowerCase();
+    //         const studentId = (s.note || "").toLowerCase();
+    //         const matchesSearch = name.includes(searchTerm.toLowerCase()) || studentId.includes(searchTerm.toLowerCase());
+    //         const matchesYear = filterYear === 'all' || s.note?.startsWith(filterYear);
+    //         return matchesSearch && matchesYear;
+    //     });
+    // }, [students, searchTerm, filterYear]);
+
+
 
     useEffect(() => { setCurrentPage(1); }, [searchTerm, filterYear, itemsPerPage]);
-
-    // const handleSend = async () => {
-    //     let finalTarget = mode === 'year' ? targetYear : mode === 'single' ? targetYear : tags.map(t => t.id);
-
-    //     if (!finalTarget || (Array.isArray(finalTarget) && finalTarget.length === 0) || !message) {
-    //         return Toast.fire({ icon: 'warning', title: 'กรุณาระบุเป้าหมายและข้อความ' });
-    //     }
-
-    //     const confirm = await Swal.fire({
-    //         title: 'ยืนยันการประกาศ?',
-    //         text: `คุณกำลังจะส่งข้อความหากลุ่มเป้าหมายที่เลือก`,
-    //         icon: 'question',
-    //         showCancelButton: true,
-    //         confirmButtonColor: '#475569',
-    //         confirmButtonText: 'ยืนยันส่ง',
-    //         cancelButtonText: 'ยกเลิก'
-    //     });
-
-    //     if (!confirm.isConfirmed) return;
-
-    //     setIsSending(true);
-    //     try {
-    //         const res = await fetch('/api/broadcast', {
-    //             method: 'POST',
-    //             headers: { 'Content-Type': 'application/json' },
-    //             body: JSON.stringify({ mode, target: finalTarget, message }),
-    //         });
-    //         const result = await res.json();
-
-    //         if (result.success) {
-    //             Toast.fire({ icon: 'success', title: `ส่งสำเร็จ ${result.count} รายการ` });
-    //             setMessage('');
-    //             if (mode === 'multi') setTags([]);
-    //             if (mode === 'single') { setSelectedName(''); setTargetYear(''); }
-    //         } else {
-    //             Swal.fire('Error', result.error || 'เกิดข้อผิดพลาดในการส่ง', 'error');
-    //         }
-    //     } catch (err) {
-    //         Swal.fire('Error', 'การเชื่อมต่อล้มเหลว', 'error');
-    //     } finally {
-    //         setIsSending(false);
-    //     }
-    // };
 
     const handleSend = async () => {
         let finalTarget = mode === 'year' ? targetYear : mode === 'single' ? targetYear : tags.map(t => t.id);
@@ -202,45 +403,66 @@ export default function AdminDashboard() {
 
         if (!confirm.isConfirmed) return;
 
+        const messageSnapshot = message;
         setIsSending(true);
+        setMessage('');
+
         try {
             const res = await fetch('/api/broadcast', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode, target: finalTarget, message }),
+                body: JSON.stringify({ mode, target: finalTarget, message: messageSnapshot }),
             });
             const result = await res.json();
 
             if (result.success) {
-                // 📝 1. บันทึกประวัติการบรอดแคสต์
-                await supabase.from('broadcast_logs').insert([{
-                    target_type: mode,
-                    target_id: mode === 'multi' ? finalTarget.join(',') : String(finalTarget),
-                    message_text: message
-                }]);
-
-                // 💬 2. ถ้าส่งรายบุคคล ให้เก็บเข้าประวัติแชทด้วยเพื่อให้เห็นเป็น Log การคุย
-                if (mode === 'single') {
-                    await supabase.from('chat_messages').insert([{
-                        line_user_id: targetYear,
-                        message_text: message,
-                        sender_type: 'admin'
-                    }]);
+                let logId = "";
+                // ✅ เปลี่ยนจากการบันทึกเลขปี ให้บันทึกรายชื่อ ID ทั้งหมดคั่นด้วย Comma
+                if ((mode === 'year' || mode === 'multi') && result.sentIds) {
+                    logId = result.sentIds.join(',');
+                } else {
+                    logId = String(finalTarget);
                 }
 
+                // บันทึกลง broadcast_logs เพียงจุดเดียว
+                const { error: logError } = await supabase
+                    .from('broadcast_logs')
+                    .insert([{
+                        target_type: mode,
+                        target_id: logId,
+                        message_text: messageSnapshot
+                    }]);
+
+                if (!logError) fetchLogs(); // โหลดประวัติใหม่ทันที
+
+                // ✅ ลบโค้ดส่วนที่เรียกใช้ "tasks" ที่ทำให้เกิด Error ออกแล้ว
+
+                if (mode === 'single') fetchChatMessages(finalTarget);
+
                 Toast.fire({ icon: 'success', title: `ส่งสำเร็จ ${result.count} รายการ` });
-                setMessage('');
                 if (mode === 'multi') setTags([]);
-                if (mode === 'single') { setSelectedName(''); setTargetYear(''); }
+                if (mode === 'single' || mode === 'year') {
+                    setSelectedName('');
+                    setTargetYear('');
+                }
             } else {
-                Swal.fire('Error', result.error || 'เกิดข้อผิดพลาดในการส่ง', 'error');
+                throw new Error(result.error);
             }
         } catch (err) {
-            Swal.fire('Error', 'การเชื่อมต่อล้มเหลว', 'error');
+            setMessage(messageSnapshot);
+            Swal.fire('Error', err.message, 'error');
         } finally {
             setIsSending(false);
         }
     };
+
+
+    useEffect(() => {
+        if (mode === 'single' && targetYear) {
+            fetchChatMessages(targetYear);
+        }
+    }, [targetYear, mode]);
+
 
     useEffect(() => {
         if (!activeChatId) return;
@@ -298,6 +520,119 @@ export default function AdminDashboard() {
         };
     }, [supabase]);
 
+
+    // แก้ไขฟังก์ชัน clearChatHistory ใน app/admin/page.js
+    const clearChatHistory = async () => {
+        // ✅ เปลี่ยนจาก selectedUser เป็น targetYear
+        if (!targetYear) return;
+
+        const confirm = await Swal.fire({
+            title: 'ยืนยันการล้างแชท?',
+            text: "ประวัติการสนทนาทั้งหมดของคนนี้จะถูกลบถาวรจากระบบ",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'ใช่, ลบเลย!',
+            cancelButtonText: 'ยกเลิก'
+        });
+
+        if (confirm.isConfirmed) {
+            try {
+                const { error } = await supabase
+                    .from('chat_messages')
+                    .delete()
+                    .eq('line_user_id', targetYear); // ✅ ใช้ targetYear ซึ่งเก็บ Line ID ไว้
+
+                if (error) throw error;
+
+                setChatMessages([]);
+                Toast.fire({ icon: 'success', title: 'ล้างประวัติแชทเรียบร้อยแล้ว' });
+            } catch (err) {
+                console.error('Clear chat error:', err);
+                Swal.fire('Error', 'ไม่สามารถล้างประวัติแชทได้', 'error');
+            }
+        }
+    };
+
+    // ลบทีละรายการ
+    const handleDeleteLog = async (id) => {
+        const confirm = await Swal.fire({
+            title: 'ยืนยันการลบ?',
+            text: "ข้อมูลประวัตินี้จะหายไป แต่ข้อความในแชทนักศึกษายังอยู่นะครับ",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'ลบเลย',
+            cancelButtonText: 'ยกเลิก'
+        });
+
+        if (confirm.isConfirmed) {
+            const { error } = await supabase.from('broadcast_logs').delete().eq('id', id);
+            if (!error) {
+                Toast.fire({ icon: 'success', title: 'ลบรายการแล้ว' });
+                fetchLogs();
+            }
+        }
+    };
+
+    // ล้างประวัติ LOG ทั้งหมด
+    const handleClearAllLogs = async () => {
+        const confirm = await Swal.fire({
+            title: 'ล้างประวัติทั้งหมด?',
+            text: "ประวัติการประกาศทั้งหมดจะถูกลบถาวร!",
+            icon: 'danger',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'ล้างทั้งหมด',
+            cancelButtonText: 'ยกเลิก'
+        });
+
+        if (confirm.isConfirmed) {
+            const { error } = await supabase.from('broadcast_logs').delete().neq('id', 0); // ลบทุก id ที่ไม่เป็น 0
+            if (!error) {
+                Toast.fire({ icon: 'success', title: 'ล้างประวัติเรียบร้อย' });
+                fetchLogs();
+            }
+        }
+    };
+
+    // Logic สำหรับกรองและจัดลำดับ (Sorting)
+    const filteredAndSortedStudents = useMemo(() => {
+        // 1. Filter ข้อมูลตามปกติ
+        let result = students.filter(s => {
+            const name = (s.display_name_th || s.first_name || "").toLowerCase();
+            const studentId = (s.note || "").toLowerCase();
+            const matchesSearch = name.includes(searchTerm.toLowerCase()) ||
+                studentId.includes(searchTerm.toLowerCase());
+            const matchesYear = filterYear === 'all' || s.note?.startsWith(filterYear);
+
+            if (onlyUnread) {
+                return matchesSearch && matchesYear && (unreadCounts[s.line_user_id] > 0);
+            }
+            return matchesSearch && matchesYear;
+        });
+
+        // 2. ✅ จัดลำดับ: ใครมีข้อความค้าง (Unread) ให้ขึ้นอันดับ 1
+        return result.sort((a, b) => {
+            const countA = unreadCounts[a.line_user_id] || 0;
+            const countB = unreadCounts[b.line_user_id] || 0;
+
+            // ถ้าคน B มีข้อความใหม่ แต่คน A ไม่มี ให้คน B ขึ้นก่อน
+            if (countA !== countB) return countB - countA;
+
+            // ถ้าไม่มีข้อความใหม่ทั้งคู่ ให้เรียงตามรหัสวิชา/โน้ต (หรือ ID)
+            return (b.note || "").localeCompare(a.note || "");
+        });
+    }, [students, searchTerm, filterYear, unreadCounts, onlyUnread]);
+    // แก้ไขตัวแปรสำหรับแบ่งหน้า (Pagination)
+    const currentDisplayItems = filteredAndSortedStudents.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const totalPages = Math.ceil(filteredAndSortedStudents.length / itemsPerPage);
+    // const currentItems = filteredAndSortedStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     return (
         <div className="min-h-screen p-6 md:p-12 space-y-10 font-['Prompt'] bg-[#F8FAFC]">
@@ -430,22 +765,71 @@ export default function AdminDashboard() {
 
                 {/* Data Table - ลบปุ่มจัดการออกเพื่อให้ดูสะอาดตา */}
                 <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
-                    <div className="p-7 border-b border-slate-50 flex justify-between items-center bg-white/50">
-                        <div className="text-xs font-bold text-slate-400 flex items-center gap-2 tracking-widest uppercase">
-                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
-                            แสดงทั้งหมด {filteredStudents.length} รายชื่อ
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                            แสดงหน้าละ
-                            <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="bg-slate-100 rounded-lg px-2 py-1 outline-none border-none cursor-pointer">
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                            </select>
+                    <div className="p-5 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+                            {/* ฝั่งซ้าย: แสดงสถานะและจำนวน */}
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-50 px-4 py-2 rounded-2xl flex items-center gap-3 border border-blue-100/50">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                    </span>
+                                    <p className="text-[13px] font-bold text-blue-700 tracking-tight">
+                                        ทั้งหมด <span className="text-blue-900 mx-1">{filteredAndSortedStudents.length}</span> รายชื่อ
+                                    </p>
+                                </div>
+
+                                {/* ตัวเลือกหน้าละ (Compact Style) */}
+                                <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Show</span>
+                                    <select
+                                        value={itemsPerPage}
+                                        onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                        className="bg-transparent text-xs font-bold text-slate-600 outline-none cursor-pointer"
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* ฝั่งขวา: การกรอง (Action Area) */}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        setOnlyUnread(!onlyUnread);
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`flex items-center gap-3 px-5 py-2.5 rounded-2xl font-bold text-[13px] transition-all duration-500 transform active:scale-95 ${onlyUnread
+                                        ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-[0_10px_20px_-5px_rgba(244,63,94,0.4)] ring-4 ring-red-50'
+                                        : 'bg-white text-slate-600 border border-slate-200 hover:border-red-200 hover:bg-red-50/30'
+                                        }`}
+                                >
+                                    <div className="relative flex items-center justify-center">
+                                        <div className={`w-2.5 h-2.5 rounded-full transition-colors ${onlyUnread ? 'bg-white animate-pulse' : 'bg-red-500'}`} />
+                                        {onlyUnread && <div className="absolute w-2.5 h-2.5 rounded-full bg-white animate-ping opacity-75" />}
+                                    </div>
+                                    {onlyUnread ? 'แสดงเฉพาะข้อความใหม่' : 'กรองข้อความที่ยังไม่ได้อ่าน'}
+
+                                    {/* แสดงตัวเลข Unread รวมเล็กๆ ถ้าต้องการ */}
+                                    {!onlyUnread && Object.values(unreadCounts).filter(c => c > 0).length > 0 && (
+                                        <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-lg text-[10px]">
+                                            {Object.values(unreadCounts).filter(c => c > 0).length}
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+
                         </div>
                     </div>
 
                     <div className="overflow-x-auto">
+                        {/* เพิ่มปุ่ม Filter เหนือตาราง */}
+                        <div className="flex gap-2 mb-4">
+
+                        </div>
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-[#f8fafc] text-slate-600 text-[13px] font-mediam uppercase tracking-widest border-b border-slate-100">
 
@@ -460,7 +844,9 @@ export default function AdminDashboard() {
                             <tbody className="divide-y divide-slate-50">
                                 {loading ? (
                                     <tr><td colSpan="6" className="py-20 text-center text-slate-400 font-medium animate-pulse">กำลังโหลดข้อมูล...</td></tr>
-                                ) : currentItems.map((s, index) => (
+                                ) : currentDisplayItems.length === 0 ? ( // ✅ เช็คกรณีไม่มีข้อมูลหลังกรอง
+                                    <tr><td colSpan="6" className="py-20 text-center text-slate-400 font-medium italic">ไม่พบข้อมูลที่ต้องการ</td></tr>
+                                ) : currentDisplayItems.map((s, index) => ( // ✅ เปลี่ยนเป็น currentDisplayItems
                                     <tr key={s.id} onClick={() => handleSelectRow(s)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
                                         {mode === 'multi' && (
                                             <td className="px-8 py-5 text-center">
@@ -489,54 +875,38 @@ export default function AdminDashboard() {
                                             </div>
                                         </td>
                                         <td className="text-[13px] px-8 py-5 font-medium text-[#475569]">{s.phone || '-'}</td>
-                                        {/* <td className="px-8 py-5 text-center">
-                                            <div
-                                                className={`inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${
-                                                    // ถ้าเลือกคนนี้อยู่ในโหมด Single หรืออยู่ในรายชื่อ Tags ของโหมด Multi
-                                                    (mode === 'single' && targetYear === s.line_user_id) ||
-                                                        (mode === 'multi' && tags.find(t => t.id === s.line_user_id))
-                                                        ? 'bg-slate-800 text-white shadow-lg scale-110'
-                                                        : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600'
-                                                    }`}
-                                            >
-                                                {mode === 'multi' && tags.find(t => t.id === s.line_user_id) ? (
-                                                    <Check className="w-4 h-4" strokeWidth={3} />
-                                                ) : (
-                                                    <MessageSquare className="w-4 h-4" />
-                                                )}
 
-                                                <a
-                                                    href={`https://chat.line.biz/U6ccd986b696ae1c358ec65e5a8256ce9/chat/${s.line_user_id}`}
-                                                    target="_blank"
-                                                    className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all"
-                                                >
-                                                    <Users className="w-4 h-4" />
-                                                </a>
-                                            </div>
-                                        </td> */}
                                         <td className="px-8 py-5 text-center">
                                             <div className="flex justify-center items-center gap-2">
-                                                {/* ปุ่มหลัก: ใช้เลือกคน + เปิดแชท Real-time */}
                                                 <div
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // กันไม่ให้ไปซ้อนกับ onClick ของแถว
+                                                        e.stopPropagation();
                                                         handleSelectRow(s);
                                                     }}
-                                                    className={`cursor-pointer inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${(mode === 'single' && targetYear === s.line_user_id) ||
+                                                    // ✅ เพิ่ม relative เพื่อให้ badge แปะบนปุ่มได้
+                                                    className={`relative cursor-pointer inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${(mode === 'single' && targetYear === s.line_user_id) ||
                                                         (mode === 'multi' && tags.find(t => t.id === s.line_user_id))
                                                         ? 'bg-slate-800 text-white shadow-xl scale-110'
                                                         : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-400 hover:bg-slate-50 shadow-sm'
                                                         }`}
                                                 >
+                                                    {/* ✅ ส่วนการแสดงเลขแจ้งเตือน (Unread Badge) */}
+                                                    {unreadCounts[s.line_user_id] > 0 && (
+                                                        <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-pulse shadow-md z-10">
+                                                            {unreadCounts[s.line_user_id] > 9 ? '9+' : unreadCounts[s.line_user_id]}
+                                                        </span>
+                                                    )}
+
                                                     {mode === 'multi' && tags.find(t => t.id === s.line_user_id) ? (
                                                         <Check className="w-4 h-4" strokeWidth={3} />
                                                     ) : (
                                                         <MessageSquare className="w-4 h-4" />
                                                     )}
                                                 </div>
-
                                             </div>
                                         </td>
+
+
                                     </tr>
                                 ))}
                             </tbody>
@@ -563,7 +933,7 @@ export default function AdminDashboard() {
                                     <span className="text-slate-300 mx-1">|</span>
                                 </>
                             )}
-                            หน้าปัจจุบัน <span className="text-slate-900 font-bold">{filteredStudents.length > 0 ? currentPage : 0}</span> / {totalPages || 0}
+                            หน้าปัจจุบัน <span className="text-slate-900 font-bold">{filteredAndSortedStudents.length > 0 ? currentPage : 0}</span> / {totalPages || 0}
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="flex items-center justify-center w-10 h-10 rounded-2xl border border-slate-200 text-slate-400 disabled:opacity-20 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm active:scale-90">
@@ -654,32 +1024,6 @@ export default function AdminDashboard() {
                         </div>
                     </div>
 
-
-                    {/* Live Preview - ปรับขนาดจอกว้างขึ้น */}
-                    {/* <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col items-center justify-center h-full">
-                        <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2 italic">
-                            <span className="w-4 h-[1px] bg-slate-200"></span> Live Preview <span className="w-4 h-[1px] bg-slate-200"></span>
-                        </div>
-                        
-                        <div className="bg-[#94A3B8] w-[320px] aspect-[9/18] rounded-[3.5rem] border-[12px] border-slate-900 shadow-2xl relative p-6 transform scale-90 transition-transform hover:scale-95 duration-1000 overflow-hidden">
-                            <div className="bg-slate-900 h-6 w-1/3 mx-auto rounded-b-3xl mb-12 shadow-md"></div>
-                            {message ? (
-                                <div className="flex items-start gap-3 animate-in slide-in-from-left-3 duration-500">
-                                    <div className="w-10 h-10 bg-slate-400 rounded-full flex-shrink-0 border-2 border-white/20 shadow-sm"></div>
-                                    <div className="bg-white rounded-2xl rounded-tl-none p-4 text-[13px] leading-relaxed shadow-xl text-slate-700 font-medium border-l-4 border-[#1e293b] max-w-[210px] break-words whitespace-pre-wrap">
-                                        {message}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-[70%] text-white/30 space-y-4 italic">
-                                    <MessageSquare className="w-14 h-14 opacity-30" strokeWidth={1} />
-                                    <p className="text-[10px] tracking-widest uppercase font-bold text-center px-4">Ready to Broadcast</p>
-                                </div>
-                            )}
-                        </div>
-                        
-                    </div> */}
-
                     {/* --- ส่วน Live Preview เดิม เราจะเปลี่ยนเป็นแท็บสลับระหว่าง Preview กับ Chat History --- */}
                     <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col h-full min-h-[650px]">
                         <div className="flex items-center justify-between mb-8">
@@ -701,6 +1045,32 @@ export default function AdminDashboard() {
                         {activeChatId ? (
                             /* --- 💬 ส่วนแสดงประวัติแชท (Chat History UI) --- */
                             < div className="flex-grow flex flex-col bg-[#F1F5F9] rounded-[2rem] p-4 overflow-hidden border border-slate-200 shadow-inner h-[500px]">
+                                {/* ส่วนหัวของช่องแชท */}
+                                <div className="rounded-3xl  p-4 border-b border-slate-100 bg-white flex items-center justify-between">
+                                    <div className="flex items-center gap-3 ">
+                                        <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                                            {selectedName?.charAt(0) || 'U'}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-slate-800 text-sm">{selectedName || 'เลือกผู้ใช้งาน'}</h3>
+                                            <p className="text-[10px] text-emerald-500 flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                                Active Now
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* ✅ ปุ่มล้างประวัติแชท (ถังขยะ) */}
+                                    {targetYear && (
+                                        <button
+                                            onClick={clearChatHistory}
+                                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                            title="ล้างประวัติแชท"
+                                        >
+                                            <Trash className="w-4 h-4" /> {/* หรือใช้ไอคอน Trash จาก lucide-react ก็ได้ครับ */}
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                                     {chatMessages.length > 0 ? (
                                         /* ใช้แผงควบคุมหลักเพื่อแยกส่วนรายการข้อความกับตัวเลื่อน */
@@ -787,6 +1157,130 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             </div>
+            {/* --- 🔘 ปุ่มไอคอนประวัติขวามือ --- */}
+            <button
+                onClick={() => { setIsHistoryOpen(true); fetchLogs(); }}
+                className="fixed right-8 bottom-8 z-[60] w-14 h-14 bg-slate-800 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group"
+            >
+                <Calendar className="w-6 h-6" />
+                <span className="absolute right-full mr-4 px-3 py-1.5 bg-slate-800 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                    ดูประวัติการส่ง
+                </span>
+            </button>
+
+            {/* --- 🕒 Side History Drawer --- */}
+            {isHistoryOpen && (
+                <div className="fixed inset-0 z-[100] flex justify-end font-['Prompt']">
+                    {/* Backdrop - พื้นหลังเบลอเมื่อเปิด Drawer */}
+                    <div
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300"
+                        onClick={() => setIsHistoryOpen(false)}
+                    />
+
+                    {/* Panel - แถบประวัติ */}
+                    <div className="relative w-full max-w-md bg-slate-50 h-full shadow-2xl animate-in slide-in-from-right duration-500 flex flex-col">
+
+                        {/* Header */}
+                        <div className="p-6 bg-white border-b border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                                    <Calendar className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="font-bold text-slate-800 text-lg">ประวัติการส่ง</h2>
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Broadcast History</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {/* ✅ ปุ่มล้างทั้งหมด */}
+                                {broadcastLogs.length > 0 && (
+                                    <button
+                                        onClick={handleClearAllLogs}
+                                        className="text-[11px] font-bold text-red-400 hover:text-red-600 transition-colors flex items-center gap-1 bg-red-50 px-2 py-1 rounded-lg"
+                                    >
+                                        <Trash className="w-3 h-3" /> ล้างทั้งหมด
+                                    </button>
+                                )}
+                                <button onClick={() => setIsHistoryOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                                    <X className="w-5 h-5 text-slate-400" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content List */}
+                        <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
+                            {broadcastLogs.length > 0 ? (
+                                broadcastLogs.map((log) => (
+                                    <div key={log.id} className="p-5 rounded-[2rem] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all group relative">
+
+                                        {/* ✅ ปุ่มลบทีละรายการ (จะขึ้นเมื่อ Hover) */}
+                                        <button
+                                            onClick={() => handleDeleteLog(log.id)}
+                                            className="absolute top-4 right-4 p-2 bg-red-50 text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                                        >
+                                            <Trash className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        <div className="flex justify-between items-center mb-3 pr-8">
+                                            <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-tighter ${log.target_type === 'single' ? 'bg-blue-50 text-blue-600' :
+                                                log.target_type === 'multi' ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'
+                                                }`}>
+                                                {log.target_type === 'single' ? '● รายบุคคล' :
+                                                    log.target_type === 'multi' ? '● กลุ่มพิเศษ' : `● ประกาศรายปี`}
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-lg border border-slate-100/50">
+                                                {new Date(log.created_at).toLocaleDateString('th-TH', {
+                                                    day: '2-digit',
+                                                    month: '2-digit',
+                                                    year: '2-digit' // หรือ 'numeric' ถ้าอยากได้ปีเต็ม 2567
+                                                })}
+                                                {' • '}
+                                                {new Date(log.created_at).toLocaleTimeString('th-TH', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })} น.
+                                            </span>
+                                        </div>
+
+                                        {/* ส่วนแสดงชื่อ (ตามที่เราปรับกันไว้) */}
+                                        <div className="mb-3 px-1">
+                                            <div className="flex items-start gap-2.5">
+                                                <div className="p-1.5 bg-slate-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                                    <Users className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500" />
+                                                </div>
+                                                <div className="flex flex-col min-w-0 flex-1">
+                                                    <span className="text-[9px] text-slate-400 uppercase font-black tracking-widest mb-0.5">ผู้รับข้อความ</span>
+                                                    <span className="text-[13px] text-slate-700 font-bold break-words line-clamp-1" title={log.student_name}>
+                                                        {log.target_type === 'year'
+                                                            ? `นักศึกษาชั้นปีที่เลือก (ส่งแล้ว ${log.target_id.split(',').length} ราย)`
+                                                            : (log.student_name || 'ไม่ทราบชื่อ')
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* ข้อความ */}
+                                        <div className="bg-slate-50/50 p-4 rounded-[1.5rem] text-[12px] text-slate-600 leading-relaxed break-words border border-slate-50 group-hover:bg-white group-hover:border-slate-100 transition-all">
+                                            {log.message_text}
+                                        </div>
+                                    </div>
+                                ))
+
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-32 text-slate-300">
+                                    <MessageSquare className="w-16 h-16 mb-4 opacity-20" />
+                                    <p className="text-sm font-medium italic">ยังไม่มีประวัติการส่งข้อความ</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div >
+            )
+            }
         </div >
+
+
     );
 }

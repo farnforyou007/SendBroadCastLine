@@ -28,7 +28,8 @@ export async function POST(req) {
                 line_user_id: event.source.userId,
                 message_text: content,
                 message_type: messageType, // ต้องมีคอลัมน์นี้ใน DB นะครับ
-                sender_type: 'user'
+                sender_type: 'user',
+                is_read: true
             }]);
 
             if (error) console.error('Supabase Error:', error);

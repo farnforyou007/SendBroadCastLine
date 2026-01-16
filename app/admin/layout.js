@@ -10,6 +10,7 @@ export default function AdminLayout({ children }) {
         <section>
             {/* คุณสามารถใส่ Navbar สำหรับ Admin ตรงนี้ได้ในอนาคต */}
             {children}
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
         </section>
     );
 }
