@@ -40,6 +40,9 @@ export default function AdminDashboard() {
     const [message, setMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
 
+    // state chat
+    const [chatMessages, setChatMessages] = useState([]);
+    const [activeChatId, setActiveChatId] = useState(null); // เก็บ ID คนที่เรากำลังคุยด้วย
     const Toast = Swal.mixin({
         toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
     });
@@ -88,6 +91,8 @@ export default function AdminDashboard() {
 
             // 2. เรียกใช้การเลื่อนหน้าจอ
             setTimeout(scrollToBroadcast, 100);
+            setActiveChatId(id); // เปิดแชทคนนี้
+            scrollToBroadcast();
         }
         else if (mode === 'multi') {
             const exists = tags.find(t => t.id === id);
@@ -112,6 +117,49 @@ export default function AdminDashboard() {
     const currentItems = filteredStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     useEffect(() => { setCurrentPage(1); }, [searchTerm, filterYear, itemsPerPage]);
+
+    // const handleSend = async () => {
+    //     let finalTarget = mode === 'year' ? targetYear : mode === 'single' ? targetYear : tags.map(t => t.id);
+
+    //     if (!finalTarget || (Array.isArray(finalTarget) && finalTarget.length === 0) || !message) {
+    //         return Toast.fire({ icon: 'warning', title: 'กรุณาระบุเป้าหมายและข้อความ' });
+    //     }
+
+    //     const confirm = await Swal.fire({
+    //         title: 'ยืนยันการประกาศ?',
+    //         text: `คุณกำลังจะส่งข้อความหากลุ่มเป้าหมายที่เลือก`,
+    //         icon: 'question',
+    //         showCancelButton: true,
+    //         confirmButtonColor: '#475569',
+    //         confirmButtonText: 'ยืนยันส่ง',
+    //         cancelButtonText: 'ยกเลิก'
+    //     });
+
+    //     if (!confirm.isConfirmed) return;
+
+    //     setIsSending(true);
+    //     try {
+    //         const res = await fetch('/api/broadcast', {
+    //             method: 'POST',
+    //             headers: { 'Content-Type': 'application/json' },
+    //             body: JSON.stringify({ mode, target: finalTarget, message }),
+    //         });
+    //         const result = await res.json();
+
+    //         if (result.success) {
+    //             Toast.fire({ icon: 'success', title: `ส่งสำเร็จ ${result.count} รายการ` });
+    //             setMessage('');
+    //             if (mode === 'multi') setTags([]);
+    //             if (mode === 'single') { setSelectedName(''); setTargetYear(''); }
+    //         } else {
+    //             Swal.fire('Error', result.error || 'เกิดข้อผิดพลาดในการส่ง', 'error');
+    //         }
+    //     } catch (err) {
+    //         Swal.fire('Error', 'การเชื่อมต่อล้มเหลว', 'error');
+    //     } finally {
+    //         setIsSending(false);
+    //     }
+    // };
 
     const handleSend = async () => {
         let finalTarget = mode === 'year' ? targetYear : mode === 'single' ? targetYear : tags.map(t => t.id);
@@ -142,6 +190,22 @@ export default function AdminDashboard() {
             const result = await res.json();
 
             if (result.success) {
+                // 📝 1. บันทึกประวัติการบรอดแคสต์
+                await supabase.from('broadcast_logs').insert([{
+                    target_type: mode,
+                    target_id: mode === 'multi' ? finalTarget.join(',') : String(finalTarget),
+                    message_text: message
+                }]);
+
+                // 💬 2. ถ้าส่งรายบุคคล ให้เก็บเข้าประวัติแชทด้วยเพื่อให้เห็นเป็น Log การคุย
+                if (mode === 'single') {
+                    await supabase.from('chat_messages').insert([{
+                        line_user_id: targetYear,
+                        message_text: message,
+                        sender_type: 'admin'
+                    }]);
+                }
+
                 Toast.fire({ icon: 'success', title: `ส่งสำเร็จ ${result.count} รายการ` });
                 setMessage('');
                 if (mode === 'multi') setTags([]);
@@ -157,31 +221,35 @@ export default function AdminDashboard() {
     };
 
     useEffect(() => {
-        // 1. สร้าง Channel สำหรับฟังการเปลี่ยนแปลงในตาราง mst_personal
-        const channel = supabase
-            .channel('realtime_students')
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'mst_personal' },
-                (payload) => {
-                    console.log('พบคนลงทะเบียนใหม่:', payload.new);
-                    // 2. เมื่อมีข้อมูลใหม่ ให้อัปเดต State โดยเอาคนใหม่ไปวางไว้หน้าสุด
-                    setStudents((prev) => [payload.new, ...prev]);
+        if (!activeChatId) return;
 
-                    // 3. แจ้งเตือนแอดมินเบาๆ ด้วย Toast
-                    Toast.fire({
-                        icon: 'info',
-                        title: `มีคนลงทะเบียนใหม่: ${payload.new.display_name_th || payload.new.first_name}`
-                    });
-                }
-            )
-            .subscribe();
-
-        // 4. ยกเลิกการฟังเมื่อปิดหน้าเพจ เพื่อประหยัดทรัพยากร
-        return () => {
-            supabase.removeChannel(channel);
+        // 1. ดึงประวัติเก่ามาโชว์ก่อน
+        const fetchChatHistory = async () => {
+            const { data } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .eq('line_user_id', activeChatId)
+                .order('created_at', { ascending: true });
+            setChatMessages(data || []);
         };
-    }, [supabase]);
+        fetchChatHistory();
+
+        // 2. ฟังข้อความใหม่ที่กำลังจะเข้ามา
+        const channel = supabase
+            .channel(`chat_${activeChatId}`)
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `line_user_id=eq.${activeChatId}` },
+                (payload) => {
+                    setChatMessages(prev => [...prev, payload.new]);
+                    // ถ้าเป็นข้อความจาก User ให้แจ้งเตือนเบาๆ
+                    if (payload.new.sender_type === 'user') {
+                        Toast.fire({ icon: 'info', title: 'มีข้อความใหม่เข้า!' });
+                    }
+                }
+            ).subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [activeChatId]);
 
     useEffect(() => {
         // ฟังการเปลี่ยนแปลงจาก Supabase
@@ -293,15 +361,15 @@ export default function AdminDashboard() {
                                             </div>
                                             <div className="flex items-center gap-1.5 mt-1">
                                                 <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${s.user_type === 'admin'
-                                                        ? 'bg-purple-50 text-purple-600 border border-purple-100'
-                                                        : 'bg-blue-50 text-blue-600 border border-blue-100'
+                                                    ? 'bg-purple-50 text-purple-600 border border-purple-100'
+                                                    : 'bg-blue-50 text-blue-600 border border-blue-100'
                                                     }`}>
                                                     {s.user_type || 'Student'}
                                                 </span>
                                             </div>
                                         </td>
                                         <td className="text-[13px] px-8 py-5 font-medium text-[#475569]">{s.phone || '-'}</td>
-                                        <td className="px-8 py-5 text-center">
+                                        {/* <td className="px-8 py-5 text-center">
                                             <div
                                                 className={`inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${
                                                     // ถ้าเลือกคนนี้อยู่ในโหมด Single หรืออยู่ในรายชื่อ Tags ของโหมด Multi
@@ -316,6 +384,37 @@ export default function AdminDashboard() {
                                                 ) : (
                                                     <MessageSquare className="w-4 h-4" />
                                                 )}
+
+                                                <a
+                                                    href={`https://chat.line.biz/U6ccd986b696ae1c358ec65e5a8256ce9/chat/${s.line_user_id}`}
+                                                    target="_blank"
+                                                    className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all"
+                                                >
+                                                    <Users className="w-4 h-4" />
+                                                </a>
+                                            </div>
+                                        </td> */}
+                                        <td className="px-8 py-5 text-center">
+                                            <div className="flex justify-center items-center gap-2">
+                                                {/* ปุ่มหลัก: ใช้เลือกคน + เปิดแชท Real-time */}
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation(); // กันไม่ให้ไปซ้อนกับ onClick ของแถว
+                                                        handleSelectRow(s);
+                                                    }}
+                                                    className={`cursor-pointer inline-flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-300 ${(mode === 'single' && targetYear === s.line_user_id) ||
+                                                            (mode === 'multi' && tags.find(t => t.id === s.line_user_id))
+                                                            ? 'bg-slate-800 text-white shadow-xl scale-110'
+                                                            : 'bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:border-slate-400 hover:bg-slate-50 shadow-sm'
+                                                        }`}
+                                                >
+                                                    {mode === 'multi' && tags.find(t => t.id === s.line_user_id) ? (
+                                                        <Check className="w-4 h-4" strokeWidth={3} />
+                                                    ) : (
+                                                        <MessageSquare className="w-4 h-4" />
+                                                    )}
+                                                </div>
+
                                             </div>
                                         </td>
                                     </tr>
@@ -365,7 +464,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Broadcast & Preview Layout */}
-                <div  className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch pb-20 font-['Prompt']">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch pb-20 font-['Prompt']">
 
                     {/* Broadcast Center คงเดิม */}
                     <div id="broadcast-section" className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col h-full">
@@ -435,13 +534,13 @@ export default function AdminDashboard() {
                         </div>
                     </div>
 
-                    {/* Live Preview - แก้ไขข้อความไหลออกข้าง */}
+
                     {/* Live Preview - ปรับขนาดจอกว้างขึ้น */}
-                    <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col items-center justify-center h-full">
+                    {/* <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col items-center justify-center h-full">
                         <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2 italic">
                             <span className="w-4 h-[1px] bg-slate-200"></span> Live Preview <span className="w-4 h-[1px] bg-slate-200"></span>
                         </div>
-                        {/* ปรับ w-[320px] กว้างขึ้น */}
+                        
                         <div className="bg-[#94A3B8] w-[320px] aspect-[9/18] rounded-[3.5rem] border-[12px] border-slate-900 shadow-2xl relative p-6 transform scale-90 transition-transform hover:scale-95 duration-1000 overflow-hidden">
                             <div className="bg-slate-900 h-6 w-1/3 mx-auto rounded-b-3xl mb-12 shadow-md"></div>
                             {message ? (
@@ -458,7 +557,81 @@ export default function AdminDashboard() {
                                 </div>
                             )}
                         </div>
-                        {/* </div> */}
+                        
+                    </div> */}
+
+                    {/* --- ส่วน Live Preview เดิม เราจะเปลี่ยนเป็นแท็บสลับระหว่าง Preview กับ Chat History --- */}
+                    <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/30 flex flex-col h-full min-h-[650px]">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 italic">
+                                <span className="w-4 h-[1px] bg-slate-200"></span>
+                                {activeChatId ? 'Chat History' : 'Live Preview'}
+                                <span className="w-4 h-[1px] bg-slate-200"></span>
+                            </div>
+                            {activeChatId && (
+                                <button
+                                    onClick={() => { setActiveChatId(null); setChatMessages([]); }}
+                                    className="text-[10px] font-bold text-rose-500 hover:bg-rose-50 px-3 py-1 rounded-full transition-colors"
+                                >
+                                    ปิดแชท
+                                </button>
+                            )}
+                        </div>
+
+                        {activeChatId ? (
+                            /* --- 💬 ส่วนแสดงประวัติแชท (Chat History UI) --- */
+                            <div className="flex-grow flex flex-col bg-[#F1F5F9] rounded-[2rem] p-4 overflow-hidden border border-slate-200 shadow-inner">
+                                <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                                    {chatMessages.length > 0 ? chatMessages.map((msg) => (
+                                        <div
+                                            key={msg.id}
+                                            className={`flex ${msg.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}
+                                        >
+                                            <div className={`max-w-[80%] p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender_type === 'admin'
+                                                ? 'bg-slate-800 text-white rounded-tr-none'
+                                                : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
+                                                }`}>
+                                                <p className="break-words whitespace-pre-wrap">{msg.message_text}</p>
+                                                <p className={`text-[9px] mt-1 opacity-50 ${msg.sender_type === 'admin' ? 'text-right' : 'text-left'}`}>
+                                                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-400 italic space-y-2">
+                                            <MessageSquare className="w-8 h-8 opacity-20" />
+                                            <p className="text-xs">ยังไม่มีประวัติการคุย</p>
+                                        </div>
+                                    )}
+                                </div>
+                                {/* สถานะผู้รับที่กำลังเปิดแชทอยู่ */}
+                                <div className="mt-4 pt-3 border-t border-slate-200 text-center">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                        คุยกับ: <span className="text-slate-900">{selectedName}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            /* --- 📱 ส่วน Live Preview เดิม (แสดงเมื่อยังไม่ได้เลือกแชท) --- */
+                            <div className="flex-grow flex items-center justify-center">
+                                <div className="bg-[#94A3B8] w-[280px] aspect-[9/18] rounded-[3.5rem] border-[12px] border-slate-900 shadow-2xl relative p-6 transform scale-95 transition-transform duration-700 overflow-hidden">
+                                    <div className="bg-slate-900 h-6 w-1/3 mx-auto rounded-b-3xl mb-12"></div>
+                                    {message ? (
+                                        <div className="flex items-start gap-3 animate-in slide-in-from-left-3 duration-500">
+                                            <div className="w-8 h-8 bg-slate-400 rounded-full flex-shrink-0"></div>
+                                            <div className="bg-white rounded-2xl rounded-tl-none p-3 text-[12px] shadow-lg text-slate-700 max-w-[180px] break-words">
+                                                {message}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-[70%] text-white/30 italic">
+                                            <MessageSquare className="w-12 h-12 opacity-20 mb-4" />
+                                            <p className="text-[10px] font-bold uppercase tracking-widest">No Preview</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
