@@ -39,7 +39,7 @@ export async function POST(req) {
         if (error) {
             // ตรวจสอบกรณีรหัสซ้ำ (ถ้าตั้งค่ารหัส นศ. เป็น Unique)
             if (error.code === '23505') {
-                throw new Error('รหัสนักศึกษานี้เคยลงทะเบียนไว้แล้ว');
+                throw new Error('บัญชีไลน์นี้เคยลงทะเบียนไปแล้ว');
             }
             throw error;
         }
