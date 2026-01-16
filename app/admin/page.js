@@ -724,7 +724,7 @@ export default function AdminDashboard() {
                                                     <div className={`max-w-[80%] p-3 rounded-2xl ${msg.sender_type === 'admin' ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 shadow-sm'}`}>
                                                         {/* เช็คว่าเป็นสติกเกอร์หรือไม่ (เช็คจาก message_type หรือดูว่ามีคำว่า stickershop ในลิงก์) */}
                                                         {msg.message_type === 'sticker' || msg.message_text.includes('stickershop') ? (
-                                                            <div className="p-1">
+                                                            <div className="relative w-24 h-24 p-1">
                                                                 <Image
                                                                     src={msg.message_text}
                                                                     alt="LINE Sticker"
