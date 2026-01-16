@@ -369,9 +369,9 @@ export default function AdminDashboard() {
                                                 </div>
                                             </td>
                                         )}
-                                        <td className="text-[8px] px-8 py-5 text-center text-slate-400 font-medium italic">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                                        <td className="text-[12px] px-8 py-5 text-center text-slate-400 font-medium italic">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                                         <td className="text-[8px] px-8 py-5">
-                                            <span className="bg-slate-100 text-slate-500 px-3.5 py-1.5 rounded-full text-[11px] font-medium border border-slate-200 shadow-sm uppercase">
+                                            <span className="bg-slate-100 text-slate-500 px-3.5 py-1.5 rounded-full text-[12px] font-medium border border-slate-200 shadow-sm uppercase">
                                                 {s.note || '-'}
                                             </span>
                                         </td>

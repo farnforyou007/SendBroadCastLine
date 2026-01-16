@@ -143,16 +143,19 @@ export default function StudentRegister() {
                             pattern="[0-9]*" // ดักเฉพาะตัวเลข
                             maxLength={10} // จำกัด 10 ตัวอักษร
                             className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-200 outline-none transition-all font-semibold"
-                            placeholder="XXXXXXXXXX"
+                            placeholder="xxxxxxxxxx"
                             value={formData.studentId}
                             onChange={e => {
-                                const value = e.target.value.replace(/\D/g, ''); 
+                                const value = e.target.value.replace(/\D/g, '');
                                 if (value.length <= 10) {
                                     setFormData({ ...formData, studentId: value });
                                 }
                             }}
                             required
                         />
+                        {formData.studentId && formData.studentId.length !== 10 && (
+                            <p className="text-[10px] text-rose-500 ml-1">กรุณากรอกให้ครบ 10 หลัก</p>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -165,6 +168,7 @@ export default function StudentRegister() {
                                 onChange={e => setFormData({ ...formData, firstName: e.target.value })}
                                 required
                             />
+
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">นามสกุล</label>
@@ -184,11 +188,14 @@ export default function StudentRegister() {
                             type="tel"
                             inputMode="numeric"
                             className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-200 outline-none transition-all font-semibold"
-                            placeholder="0XXXXXXXXX"
+                            placeholder="0xxxxxxxxx"
                             value={formData.phone}
                             onChange={handlePhoneChange}
                             required
                         />
+                        {formData.phone && formData.phone.length !== 10 && (
+                            <p className="text-[10px] text-rose-500 ml-1">กรุณากรอกให้ครบ 10 หลัก</p>
+                        )}
                     </div>
 
                     <button
