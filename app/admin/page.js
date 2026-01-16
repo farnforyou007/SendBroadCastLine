@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Swal from 'sweetalert2';
-
+import Image from 'next/image';
 
 import {
     Search,
@@ -711,7 +711,7 @@ export default function AdminDashboard() {
                                                     key={`chat-msg-${msg.id || index}`}
                                                     className={`flex ${msg.sender_type === 'admin' ? 'justify-end' : 'justify-start'}`}
                                                 >
-                                                    <div className={`max-w-[80%] p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender_type === 'admin'
+                                                    {/* <div className={`max-w-[80%] p-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender_type === 'admin'
                                                         ? 'bg-slate-800 text-white rounded-tr-none'
                                                         : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
                                                         }`}>
@@ -719,6 +719,30 @@ export default function AdminDashboard() {
                                                         <p className={`text-[9px] mt-1 opacity-50 ${msg.sender_type === 'admin' ? 'text-right' : 'text-left'}`}>
                                                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </p>
+                                                    </div> */}
+
+                                                    <div className={`max-w-[80%] p-3 rounded-2xl ${msg.sender_type === 'admin' ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 shadow-sm'}`}>
+                                                        {/* เช็คว่าเป็นสติกเกอร์หรือไม่ (เช็คจาก message_type หรือดูว่ามีคำว่า stickershop ในลิงก์) */}
+                                                        {msg.message_type === 'sticker' || msg.message_text.includes('stickershop') ? (
+                                                            <div className="p-1">
+                                                                <Image
+                                                                    src={msg.message_text}
+                                                                    alt="LINE Sticker"
+                                                                    fill // ใช้ fill เพื่อให้รูปขยายเต็มพื้นที่ div ที่ครอบอยู่
+                                                                    sizes="96px"
+                                                                    className="object-contain"
+                                                                    priority={false} // รูปแชทไม่จำเป็นต้องโหลดก่อนเพื่อน
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-[13px] wrap-break-word whitespace-pre-wrap leading-relaxed">
+                                                                {msg.message_text}
+                                                            </p>
+                                                        )}
+
+                                                        <div className={`text-[9px] mt-1 opacity-50 ${msg.sender_type === 'admin' ? 'text-right' : 'text-left'}`}>
+                                                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}

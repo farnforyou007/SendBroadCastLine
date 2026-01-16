@@ -12,18 +12,23 @@ export async function POST(req) {
         const event = body.events[0];
 
         // ตรวจสอบว่าเป็นข้อความประเภท Text
-        if (event && event.type === 'message' && event.message.type === 'text') {
-            const lineUserId = event.source.userId;
-            const text = event.message.text;
+        if (event.message.type === 'text') {
+            content = event.message.text;
+        }
+        else if (event.message.type === 'sticker') {
+            // ดึง URL รูปภาพสติกเกอร์จาก LINE CDN โดยใช้ stickerId
+            // รูปนี้จะเป็นไฟล์ .png ที่แสดงผลบนเว็บได้ทันที
+            content = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${event.message.stickerId}/android/sticker.png`;
+        }
 
-            // บันทึกลงตาราง chat_messages (รันเลข ID อัตโนมัติ)
-            const { error } = await supabase.from('chat_messages').insert([{
+        if (content) {
+            await supabase.from('chat_messages').insert([{
                 line_user_id: lineUserId,
-                message_text: text,
-                sender_type: 'user' // ระบุว่าเป็นข้อความจากนักศึกษา
+                message_text: content,
+                // เพิ่มคอลัมน์นี้เพื่อแยกประเภท (ถ้ามี) หรือใช้เช็คจากข้อความเอาภายหลังได้ครับ
+                message_type: event.message.type,
+                sender_type: 'user'
             }]);
-
-            if (error) console.error('Error saving message:', error);
         }
 
         return new Response('OK', { status: 200 });
