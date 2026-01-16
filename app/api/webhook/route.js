@@ -6,34 +6,33 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// ตัวอย่าง Webhook ที่ถูกต้อง
 export async function POST(req) {
-    try {
-        const body = await req.json();
-        const event = body.events[0];
+    const body = await req.json();
+    const event = body.events[0];
 
-        // ตรวจสอบว่าเป็นข้อความประเภท Text
-        if (event.message.type === 'text') {
+    if (event && event.type === 'message') {
+        let content = ''; // ✅ ประกาศตัวแปรรับค่าตรงนี้
+        const messageType = event.message.type;
+
+        if (messageType === 'text') {
             content = event.message.text;
         }
-        else if (event.message.type === 'sticker') {
-            // ดึง URL รูปภาพสติกเกอร์จาก LINE CDN โดยใช้ stickerId
-            // รูปนี้จะเป็นไฟล์ .png ที่แสดงผลบนเว็บได้ทันที
+        else if (messageType === 'sticker') {
             content = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${event.message.stickerId}/android/sticker.png`;
         }
 
+        // ✅ ตรวจสอบว่ามีค่าแล้วค่อย Insert
         if (content) {
-            await supabase.from('chat_messages').insert([{
-                line_user_id: lineUserId,
+            const { error } = await supabase.from('chat_messages').insert([{
+                line_user_id: event.source.userId,
                 message_text: content,
-                // เพิ่มคอลัมน์นี้เพื่อแยกประเภท (ถ้ามี) หรือใช้เช็คจากข้อความเอาภายหลังได้ครับ
-                message_type: event.message.type,
+                message_type: messageType, // ต้องมีคอลัมน์นี้ใน DB นะครับ
                 sender_type: 'user'
             }]);
-        }
 
-        return new Response('OK', { status: 200 });
-    } catch (err) {
-        console.error('Webhook Error:', err);
-        return new Response('Error', { status: 500 });
+            if (error) console.error('Supabase Error:', error);
+        }
     }
+    return new Response('OK');
 }
