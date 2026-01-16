@@ -18,7 +18,9 @@ import {
     MessageSquare,
     ChevronLeft,
     ChevronRight,
-    X
+    X,
+    GraduationCap, // เพิ่มอันนี้
+    Zap,
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -312,6 +314,103 @@ export default function AdminDashboard() {
                     </button>
                 </div>
 
+                {/* KPI Section */}
+                {/* Premium KPI Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    {[
+                        {
+                            label: 'Students',
+                            title: 'นักศึกษาทั้งหมด',
+                            value: students.length,
+                            unit: 'คน',
+                            icon: Users,
+                            color: 'from-blue-500 to-indigo-600',
+                            shadow: 'shadow-blue-100'
+                        },
+                        {
+                            label: 'Daily Active',
+                            title: 'ลงทะเบียนวันนี้',
+                            value: students.filter(s => new Date(s.created_at).toDateString() === new Date().toDateString()).length,
+                            unit: 'รายใหม่',
+                            icon: Calendar,
+                            color: 'from-emerald-400 to-teal-600',
+                            shadow: 'shadow-emerald-100'
+                        },
+                        {
+                            label: 'Batch Breakdown',
+                            title: 'แยกตามชั้นปี',
+                            value: dynamicYears.length,
+                            unit: 'รุ่น',
+                            icon: GraduationCap,
+                            color: 'from-purple-500 to-fuchsia-600',
+                            shadow: 'shadow-purple-100',
+                            isBatch: true // ระบุว่าเป็น Card ชั้นปีเพื่อใช้ Logic Hover
+
+                        },
+                        {
+                            label: 'System Status',
+                            title: 'การเชื่อมต่อ',
+                            value: 'Online',
+                            unit: 'Live',
+                            icon: Zap,
+                            color: 'from-amber-400 to-orange-500',
+                            shadow: 'shadow-amber-100',
+                            animate: true
+                        }
+                    ].map((kpi, i) => (
+                        <div
+                            key={i}
+                            className={`group relative overflow-hidden bg-white p-4 rounded-[2rem] border border-slate-100 shadow-xl ${kpi.shadow} transition-all duration-500 hover:shadow-2xl h-[100px] flex items-center`}
+                        >
+                            <div className={`absolute -right-2 -top-2 w-16 h-16 bg-gradient-to-br ${kpi.color} opacity-[0.05] rounded-full`}></div>
+
+                            <div className="relative flex items-center justify-between w-full gap-3">
+                                {/* ฝั่งซ้าย: Icon และ หัวข้อ */}
+                                <div className="flex items-center gap-3">
+                                    <div className={`flex-shrink-0 w-10 h-10 bg-gradient-to-br ${kpi.color} rounded-2xl flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform`}>
+                                        <kpi.icon className={`w-5 h-5 ${kpi.animate ? 'animate-pulse' : ''}`} />
+                                    </div>
+                                    <div>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-wider">{kpi.label}</span>
+                                        <h4 className="text-[13px] font-black text-slate-600 leading-tight">{kpi.title}</h4>
+                                    </div>
+                                </div>
+
+                                {/* ฝั่งขวา: ตัวเลข (จะหายไปเมื่อ Hover ใน Card ชั้นปี) */}
+                                <div className={`text-right transition-all duration-300 ${kpi.isBatch ? 'group-hover:opacity-0 group-hover:translate-x-4' : ''}`}>
+                                    <div className="flex items-baseline justify-end gap-2">
+                                        <h3 className="text-2xl font-black text-slate-800 tracking-tighter">
+                                            {typeof kpi.value === 'number' ? kpi.value.toLocaleString() : kpi.value}
+                                        </h3>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase ml-1">{kpi.unit}</span>
+                                    </div>
+                                </div>
+
+                                {/* พิเศษ: ส่วนข้อมูลแยกชั้นปี (แสดงเมื่อ Hover) */}
+                                {kpi.isBatch && (
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 translate-x-10 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-500">
+                                        <div className="flex flex-col gap-1 items-end max-h-[80px] overflow-y-auto pr-1 custom-scrollbar-mini">
+                                            {dynamicYears.map(year => {
+                                                const count = students.filter(s => {
+                                                    const usertype = s.user_type || '';
+                                                    return usertype.includes(`Student${year}`);
+                                                }).length;
+
+                                                return (
+                                                    <div key={year} className="text-[9px] font-black bg-purple-50 text-purple-600 px-2 py-0.5 rounded-lg border border-purple-100">
+                                                        รุ่น {year}: {count} คน
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Filter Bar */}
                 <div className="flex flex-col md:flex-row gap-4 items-center">
                     <div className="relative w-full md:w-72 group">
                         <Calendar className="absolute left-5 top-3.5 w-4 h-4 text-slate-400 group-focus-within:text-slate-600 transition-colors" />
@@ -321,6 +420,7 @@ export default function AdminDashboard() {
                         </select>
                         <ChevronDown className="absolute right-5 top-4 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
+
 
                     <div className="relative flex-1 w-full group">
                         <Search className="absolute left-5 top-4 h-4 w-4 text-slate-400 group-focus-within:text-slate-600 transition-colors" />
