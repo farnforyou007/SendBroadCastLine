@@ -24,6 +24,7 @@ export const metadata = {
     description: 'เชื่อมต่อ LINE เพื่อรับประกาศสำคัญได้ทันที',
     images: ['/og-image.png'], // รูปที่จะโชว์เวลาส่งลิงก์ใน LINE/Facebook
   },
+  robots: 'index, follow',
 };
 export default function RootLayout({
   children,

@@ -16,6 +16,7 @@ export default function StudentRegister() {
     useEffect(() => {
         // ตั้งชื่อ Title สำหรับ SEO (กรณีใช้ use client)
         document.title = "ลงทะเบียนรับข่าวสารนักศึกษา | คณะการแพทย์แผนไทย";
+        document.querySelector('meta[name="description"]').setAttribute('content', 'ลงทะเบียนรับข่าวสารผ่าน LINE ของคณะการแพทย์แผนไทย มหาวิทยาลัยสงขลานครินทร์');
     }, []);
 
     useEffect(() => {
@@ -115,8 +116,11 @@ export default function StudentRegister() {
 
                 {/* Header Section */}
                 <div className="pt-10 pb-6 flex flex-col items-center border-b border-slate-50">
+
                     <div className="relative mb-4">
+
                         <div className="w-24 h-24 rounded-full border-4 border-white shadow-md overflow-hidden bg-slate-100 ring-2 ring-blue-100">
+
                             {profile?.pictureUrl ? (
                                 <img src={profile.pictureUrl} alt="profile" className="w-full h-full object-cover" />
                             ) : (
@@ -125,7 +129,7 @@ export default function StudentRegister() {
                         </div>
                         <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white rounded-full"></div>
                     </div>
-                    <h2 className="text-xl font-black text-slate-800">ลงทะเบียนนักศึกษา</h2>
+                    <h2 className="text-xl font-black text-slate-800">ลงทะเบียนรับข่าวสาร</h2>
                     <p className="text-slate-400 text-sm mt-1 font-medium">สวัสดีคุณ {profile?.displayName || 'Student'}</p>
                 </div>
 
@@ -134,19 +138,26 @@ export default function StudentRegister() {
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">รหัสนักศึกษา</label>
                         <input
-                            type="text"
-                            inputMode="numeric"
+                            type="text" // เปลี่ยนจาก number เป็น text เพื่อให้ maxLength ทำงานได้แม่นยำ
+                            inputMode="numeric" // ช่วยให้มือถือเปิดแป้นตัวเลขขึ้นมา
+                            pattern="[0-9]*" // ดักเฉพาะตัวเลข
+                            maxLength={10} // จำกัด 10 ตัวอักษร
                             className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-200 outline-none transition-all font-semibold"
                             placeholder="XXXXXXXXXX"
                             value={formData.studentId}
-                            onChange={e => setFormData({ ...formData, studentId: e.target.value })}
+                            onChange={e => {
+                                const value = e.target.value.replace(/\D/g, ''); 
+                                if (value.length <= 10) {
+                                    setFormData({ ...formData, studentId: value });
+                                }
+                            }}
                             required
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">ชื่อจริง</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">ชื่อ</label>
                             <input
                                 className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-blue-500/5 focus:border-blue-200 outline-none transition-all font-semibold"
                                 placeholder="ชื่อ"
