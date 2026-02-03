@@ -127,6 +127,11 @@ export default function AdminDashboard() {
                 (payload) => {
                     const newMessage = payload.new;
                     const senderName = getStudentName(newMessage.line_user_id);
+                    // อัปเดต State unreadCounts โดยการบวกเพิ่ม 1 ใน ID นั้นๆ
+                    setUnreadCounts(prev => ({
+                        ...prev,
+                        [newMessage.line_user_id]: (prev[newMessage.line_user_id] || 0) + 1
+                    }));
 
                     let displayMsg = "";
                     // ✅ เช็คประเภทจาก message_type หรือข้อความที่เป็นลิงก์สติกเกอร์
@@ -139,7 +144,7 @@ export default function AdminDashboard() {
                     }
 
                     showCustomToast(senderName, displayMsg);
-                    fetchUnreadCounts(); // ✅ อัปเดตเลข Badge ในตารางทันที
+                    // fetchUnreadCounts(); // ✅ อัปเดตเลข Badge ในตารางทันที
 
                     // ถ้าคุยกับคนนี้อยู่ ให้ดึงแชทใหม่มาโชว์
                     if (mode === 'single' && targetYear === newMessage.line_user_id) {
@@ -1071,6 +1076,7 @@ export default function AdminDashboard() {
                                         </button>
                                     )}
                                 </div>
+
                                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                                     {chatMessages.length > 0 ? (
                                         /* ใช้แผงควบคุมหลักเพื่อแยกส่วนรายการข้อความกับตัวเลื่อน */
